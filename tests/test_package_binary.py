@@ -49,6 +49,7 @@ def test_archive_verify_binds_executable_and_source(tmp_path: Path) -> None:
         "dependency_path": "python-root-system32-only",
     }
     assert report["executable_sha256"] == package_binary.digest(b"standalone")
+    assert report["archive_sha256"] == package_binary.digest(payload)
     assert report["hardware_access"] is False
     assert report["licenses"]["LICENSE"]["sha256"] == package_binary.digest(LICENSES["LICENSE"])
     assert payload == package_binary.archive_bytes(

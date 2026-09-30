@@ -421,14 +421,14 @@ def verify(archive_path: Path, checksum_path: Path) -> dict[str, object]:
         LICENSE_FILES
     ):
         raise ReleaseError("release license manifest differs")
-    for name, data in licenses.items():
+    for name, license_data in licenses.items():
         binding = manifest["licenses"][name]
         if (
             not isinstance(binding, dict)
             or set(binding) != {"sha256", "size"}
-            or binding["sha256"] != digest(data)
+            or binding["sha256"] != digest(license_data)
             or type(binding["size"]) is not int
-            or binding["size"] != len(data)
+            or binding["size"] != len(license_data)
             or license_entries[name].filename != f"{prefix}/{name}"
         ):
             raise ReleaseError("release license manifest differs")
