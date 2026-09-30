@@ -8,6 +8,10 @@ This repository is the next host-only component of Embedded Agent Toolkit.
 Version 0.1.0 is a local development version, not yet a published release or an
 automatically selected Toolkit component.
 
+An independent Windows executable and tag-bound provenance workflow are being
+prepared; see [standalone releases](docs/releases.md). Runtime inspection never
+invokes these build helpers.
+
 ## Install and use
 
 Python 3.11+ is required. From this checkout:

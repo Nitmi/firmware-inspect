@@ -8,4 +8,6 @@
   are half-open. Do not infer board identity, erase layout, or physical memory
   capacity from a firmware file.
 - Keep structured CLI results versioned and failures machine-readable.
+- Release and test helpers may launch bounded host-only build, version, and
+  smoke-check processes; the inspection runtime itself must not launch them.
 - Run pytest, Ruff, wheel smoke tests, and git diff --check before committing.

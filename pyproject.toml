@@ -14,6 +14,7 @@ dependencies = ["pyelftools==0.33", "intelhex==2.3.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "ruff>=0.11", "jsonschema>=4.23"]
+binary = ["pyinstaller==6.22.2"]
 
 [project.scripts]
 firmware-inspect = "firmware_inspect.cli:main"
@@ -24,6 +25,7 @@ packages = ["src/firmware_inspect"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
