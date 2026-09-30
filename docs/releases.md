@@ -1,8 +1,8 @@
 # Standalone releases
 
-The first `0.1.0` standalone release is being prepared locally. A release is not
-trusted or published until its immutable tag, successful CI, attested artifact,
-and GitHub Release have all been verified. The packaging helper was adapted
+Standalone releases are official only after their immutable tag, successful CI,
+attested artifact, and published GitHub Release have all been verified. Local
+builds and workflow artifacts alone are not published releases. The packaging helper was adapted
 from Nitmi's MIT-licensed board-registry release implementation.
 
 ## Build

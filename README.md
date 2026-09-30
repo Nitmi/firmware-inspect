@@ -4,17 +4,39 @@ Offline firmware analysis for people, agents, and CI. Inspect an ELF, Intel HEX,
 or BIN before asking a hardware tool to program it; compare builds without
 attaching to a target or running a toolchain.
 
-This repository is the next host-only component of Embedded Agent Toolkit.
-Version 0.1.0 is a local development version, not yet a published release or an
-automatically selected Toolkit component.
+This repository provides a host-only component for Embedded Agent Toolkit.
+Toolkit catalog registration and automatic selection are separate from this
+component's releases; an existing workstation lock is never changed implicitly.
 
-An independent Windows executable and tag-bound provenance workflow are being
-prepared; see [standalone releases](docs/releases.md). Runtime inspection never
-invokes these build helpers.
+Windows standalone packages are built with a tag-bound provenance workflow;
+see [standalone releases](docs/releases.md). Runtime inspection never invokes
+these build helpers. Only published assets whose integrity and GitHub attestation
+have been verified should be treated as official releases.
 
 ## Install and use
 
-Python 3.11+ is required. From this checkout:
+### Standalone Windows executable
+
+Published Windows x86_64 packages are available from
+[GitHub Releases](https://github.com/Nitmi/firmware-inspect/releases).
+Verify the ZIP checksum and GitHub attestation using the
+[release instructions](docs/releases.md), then extract the complete package
+into a new versioned directory. Keep its license and third-party notices with
+the executable. This distribution does not require a system Python installation.
+
+Invoke the exact extracted executable; no PATH changes or administrator rights
+are required for ordinary file inspection:
+
+```powershell
+$package = 'C:\tools\firmware-inspect\0.1.0\embedded-firmware-inspect-0.1.0-windows-x86_64'
+$inspector = Join-Path $package 'firmware-inspect.exe'
+& $inspector inspect C:\project\build\app.elf --json
+& $inspector diff C:\build-A\app.elf C:\build-B\app.elf --json
+```
+
+### Python source installation
+
+Python 3.11+ is required for source/wheel installations. From this checkout:
 
 ```powershell
 uv sync --locked
@@ -100,8 +122,8 @@ The self-contained [firmware-inspect Skill](skills/firmware-inspect/SKILL.md)
 routes firmware identity, layout, footprint and build-comparison requests to
 the structured CLI. It is shipped in the source distribution, not installed
 into an Agent host by the Python installer. No component MCP server is needed
-for bounded, file-only inspection. Toolkit catalog registration and binary
-distribution are separate release work; the existing workstation lock remains
+for bounded, file-only inspection. Toolkit catalog integration and activation
+are separate release work; the existing workstation lock remains
 unchanged.
 
 Parsing uses [pyelftools](https://github.com/eliben/pyelftools) and
