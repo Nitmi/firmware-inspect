@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Firmware Inspect structured CLI reports v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ok", "operation", "scope", "hardware_access", "executables_started", "flash_authorized"],
+  "properties": {
+    "schema_version": {"enum": ["embedded-firmware-inspect.inspection.v1", "embedded-firmware-inspect.diff.v1", "embedded-firmware-inspect.error.v1"]},
+    "ok": {"type": "boolean"},
+    "operation": {"enum": ["inspect", "diff"]},
+    "scope": {"const": "host_only_firmware_analysis"},
+    "hardware_access": {"const": false},
+    "executables_started": {"const": false},
+    "flash_authorized": {"const": false},
+    "tool": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version"],
+      "properties": {"name": {"const": "firmware-inspect"}, "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}}
+    },
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "source": {"$ref": "#/$defs/source"},
+    "before": {"$ref": "#/$defs/source"},
+    "after": {"$ref": "#/$defs/source"},
+    "format": {"enum": ["elf", "hex", "bin"]},
+    "address_unit": {"const": "byte"},
+    "range_convention": {"const": "half_open"},
+    "architecture": {"$ref": "#/$defs/architecture"},
+    "entry_point": {"anyOf": [{"$ref": "#/$defs/address"}, {"type": "null"}]},
+    "hex_start_address": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "object", "additionalProperties": false, "required": ["EIP"], "properties": {"EIP": {"$ref": "#/$defs/address"}}},
+        {"type": "object", "additionalProperties": false, "required": ["CS", "IP"], "properties": {"CS": {"type": "integer", "minimum": 0, "maximum": 65535}, "IP": {"type": "integer", "minimum": 0, "maximum": 65535}}}
+      ]
+    },
+    "build_ids": {"oneOf": [{"$ref": "#/$defs/build_ids"}, {"type": "object", "additionalProperties": false, "required": ["before", "after"], "properties": {"before": {"$ref": "#/$defs/build_ids"}, "after": {"$ref": "#/$defs/build_ids"}}}]},
+    "sections": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/section"}},
+    "load_segments": {"type": "array", "minItems": 1, "maxItems": 4096, "items": {"$ref": "#/$defs/segment"}},
+    "symbols": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["defined_function_object_entries", "limit", "truncated", "largest"],
+          "properties": {
+            "defined_function_object_entries": {"type": "integer", "minimum": 0, "maximum": 200000},
+            "limit": {"type": "integer", "minimum": 0, "maximum": 200},
+            "truncated": {"type": "boolean"},
+            "largest": {
+              "type": "array", "maxItems": 200,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["name", "type", "address", "size_bytes", "section_index", "table_index"],
+                "properties": {
+                  "name": {"type": "string", "minLength": 1, "maxLength": 1024},
+                  "type": {"enum": ["STT_FUNC", "STT_OBJECT"]},
+                  "address": {"$ref": "#/$defs/address"},
+                  "size_bytes": {"type": "integer", "minimum": 0},
+                  "section_index": {"type": "integer", "minimum": 1},
+                  "table_index": {"type": "integer", "minimum": 0}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "programmed_ranges": {"oneOf": [{"$ref": "#/$defs/ranges"}, {"type": "object", "additionalProperties": false, "required": ["before", "after"], "properties": {"before": {"$ref": "#/$defs/ranges"}, "after": {"$ref": "#/$defs/ranges"}}}]},
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["program_address_bytes", "load_file_bytes_sum", "section_usage"],
+      "properties": {
+        "program_address_bytes": {"type": "integer", "minimum": 0},
+        "load_file_bytes_sum": {"type": "integer", "minimum": 0},
+        "section_usage": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]}
+      }
+    },
+    "source_identical": {"type": "boolean"},
+    "identical": {"type": "boolean"},
+    "file_size_delta_bytes": {"type": "integer"},
+    "program_address_delta_bytes": {"type": "integer"},
+    "entry_point_changed": {"type": "boolean"},
+    "layout_changed": {"type": "boolean"},
+    "section_usage_delta": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/usage"}]},
+    "section_changes": {
+      "type": "array", "maxItems": 8192,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "occurrence", "change", "before", "after", "size_delta_bytes"],
+        "properties": {
+          "name": {"type": "string", "maxLength": 1024},
+          "occurrence": {"type": "integer", "minimum": 0},
+          "change": {"enum": ["added", "removed", "changed"]},
+          "before": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/section"}]},
+          "after": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/section"}]},
+          "size_delta_bytes": {"type": "integer"}
+        }
+      }
+    },
+    "load_segment_changes": {
+      "type": "array", "maxItems": 8192,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["load_address", "run_address", "occurrence", "change", "before", "after"],
+        "properties": {
+          "load_address": {"$ref": "#/$defs/address"},
+          "run_address": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]},
+          "occurrence": {"type": "integer", "minimum": 0},
+          "change": {"enum": ["added", "removed", "changed"]},
+          "before": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/segment_content"}]},
+          "after": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/segment_content"}]}
+        }
+      }
+    },
+    "error": {
+      "type": "object", "additionalProperties": false, "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {"enum": ["INPUT_INVALID", "INPUT_UNAVAILABLE", "LIMIT_EXCEEDED", "OPTIONS_INVALID", "FORMAT_INVALID", "FORMAT_UNKNOWN", "FORMAT_UNSUPPORTED", "INPUT_INCOMPATIBLE"]},
+        "message": {"type": "string"}, "retryable": {"const": false}
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "schema_version": {"const": "embedded-firmware-inspect.inspection.v1"}, "ok": {"const": true}, "operation": {"const": "inspect"}, "build_ids": {"$ref": "#/$defs/build_ids"}, "programmed_ranges": {"$ref": "#/$defs/ranges"},
+        "before": false, "after": false, "source_identical": false, "identical": false,
+        "file_size_delta_bytes": false, "program_address_delta_bytes": false,
+        "entry_point_changed": false, "layout_changed": false, "section_usage_delta": false,
+        "section_changes": false, "load_segment_changes": false, "error": false
+      },
+      "required": ["tool", "warnings", "source", "format", "address_unit", "range_convention", "architecture", "entry_point", "build_ids", "sections", "load_segments", "symbols", "programmed_ranges", "summary"]
+    },
+    {
+      "properties": {
+        "schema_version": {"const": "embedded-firmware-inspect.diff.v1"}, "ok": {"const": true}, "operation": {"const": "diff"}, "build_ids": {"type": "object"}, "programmed_ranges": {"type": "object"},
+        "source": false, "address_unit": false, "range_convention": false, "entry_point": false,
+        "hex_start_address": false, "sections": false, "load_segments": false, "symbols": false,
+        "summary": false, "error": false
+      },
+      "required": ["tool", "warnings", "before", "after", "format", "architecture", "source_identical", "identical", "file_size_delta_bytes", "program_address_delta_bytes", "entry_point_changed", "build_ids", "layout_changed", "programmed_ranges", "section_usage_delta", "section_changes", "load_segment_changes"]
+    },
+    {
+      "properties": {
+        "schema_version": {"const": "embedded-firmware-inspect.error.v1"}, "ok": {"const": false},
+        "tool": false, "warnings": false, "source": false, "before": false, "after": false,
+        "format": false, "address_unit": false, "range_convention": false, "architecture": false,
+        "entry_point": false, "hex_start_address": false, "build_ids": false, "sections": false,
+        "load_segments": false, "symbols": false, "programmed_ranges": false, "summary": false,
+        "source_identical": false, "identical": false, "file_size_delta_bytes": false,
+        "program_address_delta_bytes": false, "entry_point_changed": false, "layout_changed": false,
+        "section_usage_delta": false, "section_changes": false, "load_segment_changes": false
+      },
+      "required": ["error"]
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "address": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["path", "size_bytes", "sha256"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "size_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "architecture": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "object", "additionalProperties": false, "required": ["machine", "bits", "endianness", "elf_type"], "properties": {"machine": {"type": ["string", "integer"]}, "bits": {"enum": [32, 64]}, "endianness": {"enum": ["little", "big"]}, "elf_type": {"enum": ["ET_EXEC", "ET_DYN"]}}}
+      ]
+    },
+    "build_ids": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"type": "string", "maxLength": 8192, "pattern": "^[0-9a-f]*$"}},
+    "ranges": {
+      "type": "array", "maxItems": 4096,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["start", "end_exclusive", "length_bytes"],
+        "properties": {"start": {"$ref": "#/$defs/address"}, "end_exclusive": {"type": "integer", "minimum": 1, "maximum": 18446744073709551616}, "length_bytes": {"type": "integer", "minimum": 1}}
+      }
+    },
+    "segment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["index", "load_address", "run_address", "source_offset", "file_size_bytes", "memory_size_bytes", "sha256"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0}, "load_address": {"$ref": "#/$defs/address"},
+        "run_address": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]},
+        "source_offset": {"type": ["integer", "null"], "minimum": 0},
+        "file_size_bytes": {"type": "integer", "minimum": 0},
+        "memory_size_bytes": {"type": ["integer", "null"], "minimum": 0}, "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "section": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "type", "address", "size_bytes", "allocated", "writable", "executable", "file_backed", "sha256"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 1024},
+        "type": {"type": ["string", "integer"]}, "address": {"$ref": "#/$defs/address"},
+        "size_bytes": {"type": "integer", "minimum": 0}, "allocated": {"type": "boolean"},
+        "writable": {"type": "boolean"}, "executable": {"type": "boolean"}, "file_backed": {"type": "boolean"},
+        "sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}
+      }
+    },
+    "segment_content": {
+      "type": "object", "additionalProperties": false,
+      "required": ["load_address", "run_address", "file_size_bytes", "memory_size_bytes", "sha256"],
+      "properties": {
+        "load_address": {"$ref": "#/$defs/address"},
+        "run_address": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]},
+        "file_size_bytes": {"type": "integer", "minimum": 0},
+        "memory_size_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "usage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allocated_bytes_sum", "file_backed_bytes_sum", "zero_fill_bytes_sum", "writable_bytes_sum", "readonly_bytes_sum", "executable_bytes_sum"],
+      "properties": {
+        "allocated_bytes_sum": {"type": "integer"}, "file_backed_bytes_sum": {"type": "integer"},
+        "zero_fill_bytes_sum": {"type": "integer"}, "writable_bytes_sum": {"type": "integer"},
+        "readonly_bytes_sum": {"type": "integer"}, "executable_bytes_sum": {"type": "integer"}
+      }
+    }
+  }
+}
