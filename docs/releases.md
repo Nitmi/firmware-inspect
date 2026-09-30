@@ -26,7 +26,11 @@ uv run --locked --extra binary python scripts/package_binary.py build `
 
 Each output/work directory must be new. Compare both ZIP SHA-256 hashes.
 The manifest binds the package version, source commit, target, builder identity,
-executable size and executable SHA-256. ZIP timestamps and metadata are fixed.
+executable size and executable SHA-256. The ZIP also includes the project
+`LICENSE` and `THIRD-PARTY-NOTICES.txt`, each bound by size and SHA-256 in the
+manifest. Notices come from the pinned Windows runtime and installed libraries,
+including pyelftools' vendored Construct license. ZIP timestamps and metadata
+are fixed.
 `verify` validates integrity without running the executable or authenticating
 its publisher:
 

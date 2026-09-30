@@ -30,6 +30,8 @@ MAX_ARCHIVE = 64 * 1024 * 1024
 MAX_BINARY = 48 * 1024 * 1024
 MAX_MANIFEST = 16 * 1024
 MAX_CHECKSUM = 256
+MAX_LICENSE = 512 * 1024
+LICENSE_FILES = ("LICENSE", "THIRD-PARTY-NOTICES.txt")
 VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 REVISION = re.compile(r"[0-9a-f]{40}")
 HASH = re.compile(r"[0-9a-f]{64}")
@@ -141,16 +143,73 @@ def check_tag(root: Path, tag: str) -> dict[str, str]:
     return {"version": version, "tag": tag, "source_revision": revision}
 
 
+def notice_text(path: Path) -> str:
+    with path.open("rb") as stream:
+        data = stream.read(MAX_LICENSE + 1)
+    if not 0 < len(data) <= MAX_LICENSE:
+        raise ReleaseError("license material is empty or oversized")
+    return data.decode("utf-8").replace("\r\n", "\n").rstrip() + "\n"
+
+
+def license_materials(root: Path) -> dict[str, bytes]:
+    notices = [
+        "Third-party notices for the standalone Windows firmware-inspect release.\n"
+        "Upstream libraries and CPython are embedded without source modifications.\n"
+        "Only the combined executable is distributed; build tools are not shipped.\n"
+    ]
+    sources = [
+        (
+            f"CPython {BUILD_PYTHON} (Windows runtime)",
+            Path(sys.base_prefix) / "LICENSE.txt",
+        ),
+        (
+            "Construct vendored by pyelftools 0.33",
+            root / "docs" / "licenses" / "pyelftools-construct.txt",
+        ),
+    ]
+    for name, version, relative in (
+        ("pyelftools", "0.33", "pyelftools-0.33.dist-info/licenses/LICENSE"),
+        ("intelhex", "2.3.0", "intelhex-2.3.0.dist-info/LICENSE.txt"),
+        (
+            "pyinstaller",
+            BUILD_PYINSTALLER,
+            f"pyinstaller-{BUILD_PYINSTALLER}.dist-info/licenses/COPYING.txt",
+        ),
+        (
+            "pyinstaller-hooks-contrib",
+            "2026.7",
+            "pyinstaller_hooks_contrib-2026.7.dist-info/licenses/LICENSE",
+        ),
+    ):
+        distribution = importlib.metadata.distribution(name)
+        if distribution.version != version:
+            raise ReleaseError(f"license source version differs: {name}")
+        sources.append((f"{name} {version}", Path(distribution.locate_file(relative))))
+    for label, path in sources:
+        notices.append(f"\n{'=' * 72}\n{label}\n{'=' * 72}\n\n{notice_text(path)}")
+    return {
+        "LICENSE": notice_text(root / "LICENSE").encode("utf-8"),
+        "THIRD-PARTY-NOTICES.txt": "".join(notices).encode("utf-8"),
+    }
+
+
 def archive_bytes(
     version: str,
     revision: str,
     executable: bytes,
     builder: dict[str, str] | None = None,
+    *,
+    licenses: dict[str, bytes],
 ) -> bytes:
     if not VERSION.fullmatch(version) or not REVISION.fullmatch(revision):
         raise ReleaseError("invalid release identity")
     if not executable or len(executable) > MAX_BINARY:
         raise ReleaseError("standalone executable is empty or oversized")
+    if set(licenses) != set(LICENSE_FILES) or any(
+        not isinstance(data, bytes) or not 0 < len(data) <= MAX_LICENSE
+        for data in licenses.values()
+    ):
+        raise ReleaseError("license materials differ or are empty/oversized")
     prefix = f"{PROJECT}-{version}-{TARGET}"
     builder = builder or {
         "python": BUILD_PYTHON,
@@ -176,6 +235,10 @@ def archive_bytes(
             "executable_sha256": digest(executable),
             "executable_size": len(executable),
             "scope": "host_only_firmware_analysis",
+            "licenses": {
+                name: {"sha256": digest(licenses[name]), "size": len(licenses[name])}
+                for name in LICENSE_FILES
+            },
         }
     )
     output = io.BytesIO()
@@ -183,6 +246,7 @@ def archive_bytes(
         for name, data, mode in (
             (f"{prefix}/{COMMAND}.exe", executable, 0o755),
             (f"{prefix}/release-manifest.json", manifest, 0o644),
+            *((f"{prefix}/{name}", licenses[name], 0o644) for name in LICENSE_FILES),
         ):
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.create_system = 3
@@ -200,6 +264,7 @@ def build(root: Path, output_dir: Path, work_dir: Path) -> dict[str, object]:
     builder = builder_identity()
     revision = clean_revision(root)
     version = project_version(root)
+    licenses = license_materials(root)
     if output_dir.exists() or work_dir.exists():
         raise ReleaseError("build output or work directory already exists")
     output_dir.mkdir(parents=True)
@@ -241,7 +306,7 @@ def build(root: Path, output_dir: Path, work_dir: Path) -> dict[str, object]:
     if executable_path.is_symlink() or not executable_path.is_file():
         raise ReleaseError(f"PyInstaller did not create {COMMAND}.exe")
     executable = executable_path.read_bytes()
-    payload = archive_bytes(version, revision, executable, builder)
+    payload = archive_bytes(version, revision, executable, builder, licenses=licenses)
     archive = output_dir / f"{PROJECT}-{version}-{TARGET}.zip"
     checksum = archive.with_suffix(".zip.sha256")
     archive.write_bytes(payload)
@@ -276,7 +341,7 @@ def verify(archive_path: Path, checksum_path: Path) -> dict[str, object]:
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             entries = archive.infolist()
-            if len(entries) != 2 or len({entry.filename.casefold() for entry in entries}) != 2:
+            if len(entries) != 4 or len({entry.filename.casefold() for entry in entries}) != 4:
                 raise ReleaseError("archive inventory differs")
             manifests = [
                 entry for entry in entries if entry.filename.endswith("/release-manifest.json")
@@ -296,8 +361,15 @@ def verify(archive_path: Path, checksum_path: Path) -> dict[str, object]:
                 raise ReleaseError("release manifest is oversized")
             if not 0 < binaries[0].file_size <= MAX_BINARY:
                 raise ReleaseError("standalone executable size is invalid")
+            license_entries = {}
+            for name in LICENSE_FILES:
+                matches = [entry for entry in entries if entry.filename.endswith(f"/{name}")]
+                if len(matches) != 1 or not 0 < matches[0].file_size <= MAX_LICENSE:
+                    raise ReleaseError("archive license materials differ")
+                license_entries[name] = matches[0]
             manifest = json.loads(archive.read(manifests[0]), object_pairs_hook=unique_object)
             executable = archive.read(binaries[0])
+            licenses = {name: archive.read(entry) for name, entry in license_entries.items()}
     except (zipfile.BadZipFile, UnicodeError, json.JSONDecodeError) as error:
         raise ReleaseError("invalid standalone archive") from error
     expected_fields = {
@@ -312,6 +384,7 @@ def verify(archive_path: Path, checksum_path: Path) -> dict[str, object]:
         "executable_sha256",
         "executable_size",
         "scope",
+        "licenses",
     }
     if not isinstance(manifest, dict) or set(manifest) != expected_fields:
         raise ReleaseError("release manifest fields differ")
@@ -344,6 +417,21 @@ def verify(archive_path: Path, checksum_path: Path) -> dict[str, object]:
         or binaries[0].filename != f"{prefix}/{COMMAND}.exe"
     ):
         raise ReleaseError("release manifest values differ")
+    if not isinstance(manifest["licenses"], dict) or set(manifest["licenses"]) != set(
+        LICENSE_FILES
+    ):
+        raise ReleaseError("release license manifest differs")
+    for name, data in licenses.items():
+        binding = manifest["licenses"][name]
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"sha256", "size"}
+            or binding["sha256"] != digest(data)
+            or type(binding["size"]) is not int
+            or binding["size"] != len(data)
+            or license_entries[name].filename != f"{prefix}/{name}"
+        ):
+            raise ReleaseError("release license manifest differs")
     return {
         "archive": str(archive_path.resolve()),
         "archive_sha256": digest(data),

@@ -10,6 +10,8 @@ import pytest
 
 from scripts import package_binary
 
+LICENSES = {"LICENSE": b"project license", "THIRD-PARTY-NOTICES.txt": b"upstream notices"}
+
 
 def write_release(tmp_path: Path, payload: bytes) -> tuple[Path, Path]:
     archive = tmp_path / "embedded-firmware-inspect-0.1.0-windows-x86_64.zip"
@@ -35,7 +37,7 @@ def rewrite_zip(payload: bytes, transform) -> bytes:
 
 
 def test_archive_verify_binds_executable_and_source(tmp_path: Path) -> None:
-    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone")
+    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone", licenses=LICENSES)
     archive, checksum = write_release(tmp_path, payload)
 
     report = package_binary.verify(archive, checksum)
@@ -48,10 +50,14 @@ def test_archive_verify_binds_executable_and_source(tmp_path: Path) -> None:
     }
     assert report["executable_sha256"] == package_binary.digest(b"standalone")
     assert report["hardware_access"] is False
+    assert report["licenses"]["LICENSE"]["sha256"] == package_binary.digest(LICENSES["LICENSE"])
+    assert payload == package_binary.archive_bytes(
+        "0.1.0", "a" * 40, b"standalone", licenses=LICENSES
+    )
 
 
 def test_modified_executable_is_rejected_even_with_new_archive_checksum(tmp_path: Path) -> None:
-    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone")
+    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone", licenses=LICENSES)
     modified = rewrite_zip(
         payload,
         lambda name, data: b"changed" if name.endswith("firmware-inspect.exe") else data,
@@ -63,7 +69,7 @@ def test_modified_executable_is_rejected_even_with_new_archive_checksum(tmp_path
 
 
 def test_duplicate_manifest_field_is_rejected(tmp_path: Path) -> None:
-    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone")
+    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone", licenses=LICENSES)
     modified = rewrite_zip(
         payload,
         lambda name, data: (
@@ -79,7 +85,7 @@ def test_duplicate_manifest_field_is_rejected(tmp_path: Path) -> None:
 
 
 def test_non_regular_archive_member_is_rejected(tmp_path: Path) -> None:
-    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone")
+    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone", licenses=LICENSES)
     source = zipfile.ZipFile(io.BytesIO(payload))
     output = io.BytesIO()
     with source, zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as target:
@@ -96,6 +102,35 @@ def test_non_regular_archive_member_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(package_binary.ReleaseError, match="not a regular file"):
         package_binary.verify(archive, checksum)
+
+
+def test_modified_license_is_rejected_even_with_new_archive_checksum(tmp_path: Path) -> None:
+    payload = package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone", licenses=LICENSES)
+    modified = rewrite_zip(
+        payload,
+        lambda name, data: b"changed" if name.endswith("THIRD-PARTY-NOTICES.txt") else data,
+    )
+    archive, checksum = write_release(tmp_path, modified)
+    with pytest.raises(package_binary.ReleaseError, match="license manifest differs"):
+        package_binary.verify(archive, checksum)
+
+
+@pytest.mark.parametrize(
+    "licenses",
+    [{}, {**LICENSES, "LICENSE": b""}, {**LICENSES, "extra": b"unexpected"}],
+)
+def test_archive_requires_exact_nonempty_license_materials(licenses: dict[str, bytes]) -> None:
+    with pytest.raises(package_binary.ReleaseError, match="license materials differ"):
+        package_binary.archive_bytes("0.1.0", "a" * 40, b"standalone", licenses=licenses)
+
+
+def test_license_materials_require_locked_dependencies(tmp_path: Path) -> None:
+    with (
+        mock.patch.object(package_binary.importlib.metadata, "distribution") as distribution,
+        pytest.raises(package_binary.ReleaseError, match="license source version differs"),
+    ):
+        distribution.return_value.version = "unexpected"
+        package_binary.license_materials(tmp_path)
 
 
 def test_tag_must_bind_version_and_current_commit(tmp_path: Path) -> None:
