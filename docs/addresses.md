@@ -1,6 +1,6 @@
 # Offline code-address queries
 
-`addresses` is available in the local 0.3.0 candidate. It reads the specified
+`addresses` is available in 0.3.0 and newer. It reads the specified
 linked ELF once, hashes that bounded snapshot and parses it with pyelftools.
 It does not read target memory, collect registers, invoke a toolchain, open
 source files or load external debug files.

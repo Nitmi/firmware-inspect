@@ -36,13 +36,15 @@ its publisher:
 
 ```powershell
 uv run --locked --extra binary python scripts/package_binary.py verify `
-  C:\work\release-a\embedded-firmware-inspect-0.2.0-windows-x86_64.zip `
-  --checksum C:\work\release-a\embedded-firmware-inspect-0.2.0-windows-x86_64.zip.sha256 --json
+  C:\work\release-a\embedded-firmware-inspect-0.3.0-windows-x86_64.zip `
+  --checksum C:\work\release-a\embedded-firmware-inspect-0.3.0-windows-x86_64.zip.sha256 --json
 ```
 
 After extraction, `scripts/smoke_binary.py` runs the exact EXE against generated
 ELF/HEX/BIN inputs, checks Build IDs, BSS, sparse/high addresses, diff results,
 exact symbol lookup (defined, undefined and absent names), and failure behavior.
+Version 0.3.0 also checks DWARF 5 line lookup, explicit Thumb address handling,
+function-only queries and non-ELF address-query errors, for 13 total checks.
 It validates native JSON against the report contract shipped by this source version.
 It does not read user firmware or access hardware.
 
@@ -53,16 +55,16 @@ the checked-out source commit, tests the code, builds twice, compares hashes,
 smoke-checks the standalone, and emits GitHub attestation. It does not create
 the GitHub Release or publish to PyPI automatically.
 
-The published [v0.2.0 Release](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.2.0)
-binds source commit `575b1cca7a21c17c16e0b3affabc5b1c7d0e1e87`.
+The published [v0.3.0 Release](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.3.0)
+binds source commit `5487be08737d5ab80d90b9195b735c78beda85a2`.
 Verify its downloaded ZIP before extracting or executing it:
 
 ```powershell
-gh attestation verify embedded-firmware-inspect-0.2.0-windows-x86_64.zip `
-  --repo Nitmi/firmware-inspect --source-ref refs/tags/v0.2.0 `
-  --source-digest 575b1cca7a21c17c16e0b3affabc5b1c7d0e1e87 `
-  --signer-digest 575b1cca7a21c17c16e0b3affabc5b1c7d0e1e87 `
-  --cert-identity https://github.com/Nitmi/firmware-inspect/.github/workflows/binary-release.yml@refs/tags/v0.2.0 `
+gh attestation verify embedded-firmware-inspect-0.3.0-windows-x86_64.zip `
+  --repo Nitmi/firmware-inspect --source-ref refs/tags/v0.3.0 `
+  --source-digest 5487be08737d5ab80d90b9195b735c78beda85a2 `
+  --signer-digest 5487be08737d5ab80d90b9195b735c78beda85a2 `
+  --cert-identity https://github.com/Nitmi/firmware-inspect/.github/workflows/binary-release.yml@refs/tags/v0.3.0 `
   --deny-self-hosted-runners
 ```
 

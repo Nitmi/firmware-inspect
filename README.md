@@ -8,14 +8,11 @@ This repository provides a host-only component for Embedded Agent Toolkit.
 Toolkit catalog registration and automatic selection are separate from this
 component's releases; an existing workstation lock is never changed implicitly.
 
-Release [0.2.0](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.2.0)
-adds exact ELF symbol queries. Hosts using `0.1.0` need to select `0.2.0` or newer
-before calling `symbols`; publishing this component does not change a host's lock.
-
-The local `0.3.0` candidate adds code-address lookup with function ranges and
-in-file DWARF source lines. It is not yet a published release. Use this checkout
-or an explicitly selected candidate when calling `addresses`; the official
-`0.2.0` executable and existing Toolkit locks do not expose this command.
+Release [0.3.0](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.3.0)
+adds code-address lookup with function ranges and in-file DWARF source lines.
+Exact ELF symbol queries are available from `0.2.0`. Select `0.3.0` or newer
+before calling `addresses`; publishing this component does not change a host's
+Toolkit version or workstation lock.
 
 Windows standalone packages are built with a tag-bound provenance workflow;
 see [standalone releases](docs/releases.md). Runtime inspection never invokes
@@ -37,11 +34,12 @@ Invoke the exact extracted executable; no PATH changes or administrator rights
 are required for ordinary file inspection:
 
 ```powershell
-$package = 'C:\tools\firmware-inspect\0.2.0\embedded-firmware-inspect-0.2.0-windows-x86_64'
+$package = 'C:\tools\firmware-inspect\0.3.0\embedded-firmware-inspect-0.3.0-windows-x86_64'
 $inspector = Join-Path $package 'firmware-inspect.exe'
 & $inspector inspect C:\project\build\app.elf --json
 & $inspector diff C:\build-A\app.elf C:\build-B\app.elf --json
 & $inspector symbols C:\project\build\app.elf --name _SEGGER_RTT --json
+& $inspector addresses C:\project\build\app.elf --address 0x101 --address-mode arm-thumb --json
 ```
 
 ### Python source installation
