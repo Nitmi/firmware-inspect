@@ -1,6 +1,6 @@
 ---
 name: firmware-inspect
-description: Inspect local ELF, Intel HEX, or BIN firmware identity and memory layout, or compare two builds using the offline firmware-inspect CLI. Use for pre-flash artifact analysis and footprint regressions, not for live target inspection or flashing.
+description: Inspect local ELF, Intel HEX, or BIN firmware identity and layout, query exact ELF symbol names, or compare builds using firmware-inspect. Use for pre-flash artifact analysis, symbol lookup and footprint regressions, not live target access or flashing.
 ---
 
 # Firmware Inspect
@@ -14,12 +14,28 @@ firmware-inspect inspect C:\project\build\app.elf --json
 firmware-inspect inspect C:\project\build\whole.hex --json
 firmware-inspect inspect C:\project\build\app.bin --base-address 0x10000 --json
 firmware-inspect diff C:\build-A\app.elf C:\build-B\app.elf --json
+firmware-inspect symbols C:\project\build\app.elf --name _SEGGER_RTT --json
 ```
 
 BIN needs a base address from the user's project/linker context; do not invent
 one. Auto format detection uses ELF magic or HEX/BIN suffixes. Use `--format`
 only when the format is known. ELF output includes at most 20 largest defined
 function/object symbol entries by default; `--symbol-limit 0..200` changes this.
+For an exact variable/function or linker-symbol request, use `symbols` in 0.2.0+
+instead of searching the size-limited inspection list. Repeat `--name` for up to
+32 distinct, case-sensitive names; no glob, demangling or substring matching.
+Read every query's `status`: `unique` identifies one set of equivalent definition
+metadata, `ambiguous` retains conflicting definitions, and `not_found`,
+`undefined_only` or `no_definition` supplies no selected value. A successful CLI
+exit means the query completed, not that every requested symbol resolved.
+
+`value` is raw ELF `st_value`; preserve `matches[].value_kind`, symbol type and
+section. TLS values are offsets, common values are alignment, and ELF PIE values
+need relocation context. Do not reinterpret them as target memory addresses or
+clear ABI bits. For an RTT block, check a unique section-defined object, its
+allocated writable section, declared size, exact ELF hash and the target RAM
+map through the debugger's native plan before using the value. This file query
+does not prove that the block is initialized or that this firmware is running.
 
 Interpret the report precisely:
 

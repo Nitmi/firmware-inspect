@@ -5,9 +5,9 @@
   "additionalProperties": false,
   "required": ["schema_version", "ok", "operation", "scope", "hardware_access", "executables_started", "flash_authorized"],
   "properties": {
-    "schema_version": {"enum": ["embedded-firmware-inspect.inspection.v1", "embedded-firmware-inspect.diff.v1", "embedded-firmware-inspect.error.v1"]},
+    "schema_version": {"enum": ["embedded-firmware-inspect.inspection.v1", "embedded-firmware-inspect.diff.v1", "embedded-firmware-inspect.symbols.v1", "embedded-firmware-inspect.error.v1"]},
     "ok": {"type": "boolean"},
-    "operation": {"enum": ["inspect", "diff"]},
+    "operation": {"enum": ["inspect", "diff", "symbols"]},
     "scope": {"const": "host_only_firmware_analysis"},
     "hardware_access": {"const": false},
     "executables_started": {"const": false},
@@ -24,6 +24,11 @@
     "address_unit": {"const": "byte"},
     "range_convention": {"const": "half_open"},
     "architecture": {"$ref": "#/$defs/architecture"},
+    "value_semantics": {"const": "elf_st_value"},
+    "complete": {"const": true},
+    "symbol_tables_scanned": {"type": "integer", "minimum": 0, "maximum": 4096},
+    "symbol_entries_scanned": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "queries": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/symbol_query"}},
     "entry_point": {"anyOf": [{"$ref": "#/$defs/address"}, {"type": "null"}]},
     "hex_start_address": {
       "anyOf": [
@@ -126,7 +131,9 @@
         "before": false, "after": false, "source_identical": false, "identical": false,
         "file_size_delta_bytes": false, "program_address_delta_bytes": false,
         "entry_point_changed": false, "layout_changed": false, "section_usage_delta": false,
-        "section_changes": false, "load_segment_changes": false, "error": false
+        "section_changes": false, "load_segment_changes": false, "error": false,
+        "queries": false, "value_semantics": false, "complete": false,
+        "symbol_tables_scanned": false, "symbol_entries_scanned": false
       },
       "required": ["tool", "warnings", "source", "format", "address_unit", "range_convention", "architecture", "entry_point", "build_ids", "sections", "load_segments", "symbols", "programmed_ranges", "summary"]
     },
@@ -135,9 +142,26 @@
         "schema_version": {"const": "embedded-firmware-inspect.diff.v1"}, "ok": {"const": true}, "operation": {"const": "diff"}, "build_ids": {"type": "object"}, "programmed_ranges": {"type": "object"},
         "source": false, "address_unit": false, "range_convention": false, "entry_point": false,
         "hex_start_address": false, "sections": false, "load_segments": false, "symbols": false,
-        "summary": false, "error": false
+        "summary": false, "error": false,
+        "queries": false, "value_semantics": false, "complete": false,
+        "symbol_tables_scanned": false, "symbol_entries_scanned": false
       },
       "required": ["tool", "warnings", "before", "after", "format", "architecture", "source_identical", "identical", "file_size_delta_bytes", "program_address_delta_bytes", "entry_point_changed", "build_ids", "layout_changed", "programmed_ranges", "section_usage_delta", "section_changes", "load_segment_changes"]
+    },
+    {
+      "properties": {
+        "schema_version": {"const": "embedded-firmware-inspect.symbols.v1"},
+        "ok": {"const": true}, "operation": {"const": "symbols"},
+        "format": {"const": "elf"}, "architecture": {"type": "object"},
+        "before": false, "after": false, "address_unit": false, "range_convention": false,
+        "entry_point": false, "hex_start_address": false, "build_ids": false, "sections": false,
+        "load_segments": false, "symbols": false, "programmed_ranges": false, "summary": false,
+        "source_identical": false, "identical": false, "file_size_delta_bytes": false,
+        "program_address_delta_bytes": false, "entry_point_changed": false, "layout_changed": false,
+        "section_usage_delta": false, "section_changes": false, "load_segment_changes": false,
+        "error": false
+      },
+      "required": ["tool", "warnings", "source", "format", "architecture", "queries", "value_semantics", "complete", "symbol_tables_scanned", "symbol_entries_scanned"]
     },
     {
       "properties": {
@@ -148,12 +172,62 @@
         "load_segments": false, "symbols": false, "programmed_ranges": false, "summary": false,
         "source_identical": false, "identical": false, "file_size_delta_bytes": false,
         "program_address_delta_bytes": false, "entry_point_changed": false, "layout_changed": false,
-        "section_usage_delta": false, "section_changes": false, "load_segment_changes": false
+        "section_usage_delta": false, "section_changes": false, "load_segment_changes": false,
+        "queries": false, "value_semantics": false, "complete": false,
+        "symbol_tables_scanned": false, "symbol_entries_scanned": false
       },
       "required": ["error"]
     }
   ],
   "$defs": {
+    "symbol_match": {
+      "type": "object", "additionalProperties": false,
+      "required": ["table_index", "table_name", "symbol_index", "type", "binding", "visibility", "value", "value_kind", "size_bytes", "definition", "section_index", "section"],
+      "properties": {
+        "table_index": {"type": "integer", "minimum": 0, "maximum": 4095},
+        "table_name": {"type": "string", "maxLength": 1024},
+        "symbol_index": {"type": "integer", "minimum": 0, "maximum": 199999},
+        "type": {"type": ["string", "integer"], "maxLength": 32},
+        "binding": {"type": ["string", "integer"], "maxLength": 32},
+        "visibility": {"type": ["string", "integer"], "maxLength": 32},
+        "value": {"$ref": "#/$defs/address"}, "size_bytes": {"$ref": "#/$defs/address"},
+        "value_kind": {"enum": ["linker_virtual_value", "absolute_value", "common_alignment", "undefined_value", "special_value", "tls_offset"]},
+        "definition": {"enum": ["section", "absolute", "common", "undefined", "reserved"]},
+        "section_index": {"type": ["string", "integer"], "maxLength": 32, "minimum": 0},
+        "section": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/section"}]}
+      }
+    },
+    "symbol_query": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "status", "matched_entries", "definition_count", "value", "matches"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "status": {"enum": ["unique", "ambiguous", "not_found", "undefined_only", "no_definition"]},
+        "matched_entries": {"type": "integer", "minimum": 0, "maximum": 256},
+        "definition_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "value": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]},
+        "matches": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/symbol_match"}}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "unique"}}},
+          "then": {"properties": {"definition_count": {"const": 1}, "value": {"$ref": "#/$defs/address"}, "matched_entries": {"minimum": 1}, "matches": {"minItems": 1}}},
+          "else": {"properties": {"value": {"const": null}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "ambiguous"}}},
+          "then": {"properties": {"definition_count": {"minimum": 2}, "matched_entries": {"minimum": 2}, "matches": {"minItems": 2}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "not_found"}}},
+          "then": {"properties": {"definition_count": {"const": 0}, "matched_entries": {"const": 0}, "matches": {"maxItems": 0}}}
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["undefined_only", "no_definition"]}}},
+          "then": {"properties": {"definition_count": {"const": 0}, "matched_entries": {"minimum": 1}, "matches": {"minItems": 1}}}
+        }
+      ]
+    },
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "address": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
     "source": {

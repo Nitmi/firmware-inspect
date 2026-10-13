@@ -6,6 +6,7 @@ import stat
 from pathlib import Path
 from typing import Any
 
+from elftools.elf.constants import SHN_INDICES
 from elftools.elf.elffile import ELFFile
 from elftools.elf.sections import NoteSection, SymbolTableSection
 from elftools.elf.segments import NoteSegment
@@ -323,6 +324,7 @@ def _elf(data: bytes, symbol_limit: int) -> dict[str, Any]:
                     kind not in {"STT_FUNC", "STT_OBJECT"}
                     or not isinstance(symbol["st_shndx"], int)
                     or symbol["st_shndx"] == 0
+                    or symbol["st_shndx"] >= SHN_INDICES.SHN_LORESERVE
                     or not symbol.name
                 ):
                     continue

@@ -7,6 +7,7 @@ import sys
 
 from fixtures import elf_image
 
+from firmware_inspect import __version__
 from firmware_inspect.cli import main
 
 
@@ -53,5 +54,5 @@ def test_module_entrypoint_runs_from_other_directory(tmp_path):
         timeout=10,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == "firmware-inspect 0.1.0"
+    assert result.stdout.strip() == f"firmware-inspect {__version__}"
     assert result.stderr == ""

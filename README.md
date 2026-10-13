@@ -8,6 +8,10 @@ This repository provides a host-only component for Embedded Agent Toolkit.
 Toolkit catalog registration and automatic selection are separate from this
 component's releases; an existing workstation lock is never changed implicitly.
 
+The source `0.2.0` candidate adds exact ELF symbol queries. Published `0.1.0`
+does not include `symbols`; use the source checkout for this new command until
+its release is published and selected explicitly by the host.
+
 Windows standalone packages are built with a tag-bound provenance workflow;
 see [standalone releases](docs/releases.md). Runtime inspection never invokes
 these build helpers. Only published assets whose integrity and GitHub attestation
@@ -99,12 +103,48 @@ It does not pretend to be a symbol ABI comparison or an instruction-level diff.
 `source_identical` means equal input hashes; `identical` additionally requires
 equal load-address ranges. The CLI uses the same BIN base for both inputs.
 
+## Exact ELF symbols
+
+```powershell
+uv run --locked firmware-inspect symbols C:\project\build\app.elf `
+  --name _SEGGER_RTT --name main --json
+```
+
+This scans all regular/dynamic symbol tables, independently of `inspect`'s
+largest-symbol limit. Supply 1..32 distinct exact names. Matching is
+case-sensitive, with no glob, demangling or substring rules. The source path,
+size and SHA-256 bind the same bounded snapshot that is parsed.
+
+Each query reports `unique`, `ambiguous`, `not_found`, `undefined_only`, or
+`no_definition`, with every matching entry's table/index, type, binding,
+visibility, section, raw value and size. Equivalent definition metadata across
+tables counts once for uniqueness, while all original entries remain visible.
+Conflicting definitions are not resolved by address order or global/weak
+precedence. A zero-sized definition is retained without inventing its extent.
+Missing/stripped symbols are a completed query, not an error or a guessed value.
+More than 256 matching entries fails without returning a partial resolution.
+
+`value` means ELF `st_value`, not a validated target address. TLS values are
+offsets, common entries encode alignment, and ET_DYN/PIE needs relocation context;
+see the [ELF symbol-table specification](https://gabi.xinuos.com/elf/05-symtab.html).
+Architecture-specific bits are preserved. Section-defined and absolute
+definitions can be unique without proving live memory, board or running-firmware
+identity. Special/extended section indexes are retained as unresolved, not
+guessed. This query supports linked ET_EXEC/ET_DYN files like inspection;
+relocatable ET_REL objects remain unsupported.
+
+For `_SEGGER_RTT`, review a unique section-defined object, its allocated writable
+section and declared size, and pass the exact build hash and value to the
+debugger's native plan with its target RAM checks. The query itself never scans
+RAM, attaches, reads a target or asserts block initialization.
+
 ## Structured contract
 
 `--json` writes one JSON object to stdout; successful operations exit 0 and
 inspection failures exit 1. Invalid CLI syntax exits 2 through argparse.
 Reports use `embedded-firmware-inspect.inspection.v1`,
-`embedded-firmware-inspect.diff.v1`, or `embedded-firmware-inspect.error.v1`.
+`embedded-firmware-inspect.diff.v1`, `embedded-firmware-inspect.symbols.v1`,
+or `embedded-firmware-inspect.error.v1`.
 Reports always state `scope=host_only_firmware_analysis`, `hardware_access=false`,
 `executables_started=false`, and `flash_authorized=false`.
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import __version__
 from .core import InspectionError, compare, inspect
+from .symbols import lookup
 
 
 def _address(value: str) -> int:
@@ -33,17 +34,28 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--base-address", type=_address)
         command.add_argument("--json", action="store_true")
     single.add_argument("--symbol-limit", type=int, default=20, help="largest symbols, 0..200")
+    symbols = commands.add_parser(
+        "symbols", help="query exact ELF symbol names, preserving ambiguity"
+    )
+    symbols.add_argument("firmware", type=Path)
+    symbols.add_argument(
+        "--name", action="append", required=True, help="exact name; repeat up to 32 times"
+    )
+    symbols.add_argument("--json", action="store_true")
     return root
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        options = {"format": args.format, "base_address": args.base_address}
-        if args.command == "inspect":
-            report = inspect(args.firmware, symbol_limit=args.symbol_limit, **options)
+        if args.command == "symbols":
+            report = lookup(args.firmware, args.name)
         else:
-            report = compare(inspect(args.before, **options), inspect(args.after, **options))
+            options = {"format": args.format, "base_address": args.base_address}
+            if args.command == "inspect":
+                report = inspect(args.firmware, symbol_limit=args.symbol_limit, **options)
+            else:
+                report = compare(inspect(args.before, **options), inspect(args.after, **options))
     except InspectionError as error:
         report = {
             "schema_version": "embedded-firmware-inspect.error.v1",
@@ -59,6 +71,14 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
     elif not report["ok"]:
         print(f"{report['error']['code']}: {report['error']['message']}", file=sys.stderr)
+    elif args.command == "symbols":
+        print(f"ELF: {json.dumps(report['source']['path'])}")
+        print(f"SHA-256: {report['source']['sha256']}")
+        for query in report["queries"]:
+            value = f"; st_value=0x{query['value']:X}" if query["value"] is not None else ""
+            print(f"  {json.dumps(query['name'])}: {query['status']}{value}")
+        for warning in report["warnings"]:
+            print(f"Warning: {warning}", file=sys.stderr)
     elif args.command == "inspect":
         print(f"{report['format'].upper()}: {report['source']['path']}")
         print(f"SHA-256: {report['source']['sha256']}")

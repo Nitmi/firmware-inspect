@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "embedded-firmware-inspect"
-version = "0.1.0"
+version = "0.2.0"
 description = "Offline firmware identity, layout, and build comparison for embedded agents"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -36,13 +36,14 @@ its publisher:
 
 ```powershell
 uv run --locked --extra binary python scripts/package_binary.py verify `
-  C:\work\release-a\embedded-firmware-inspect-0.1.0-windows-x86_64.zip `
-  --checksum C:\work\release-a\embedded-firmware-inspect-0.1.0-windows-x86_64.zip.sha256 --json
+  C:\work\release-a\embedded-firmware-inspect-0.2.0-windows-x86_64.zip `
+  --checksum C:\work\release-a\embedded-firmware-inspect-0.2.0-windows-x86_64.zip.sha256 --json
 ```
 
 After extraction, `scripts/smoke_binary.py` runs the exact EXE against generated
-ELF/HEX/BIN inputs, checks Build IDs, BSS, sparse/high addresses, diff results and
-failure behavior, and validates native JSON against the packaged report contract.
+ELF/HEX/BIN inputs, checks Build IDs, BSS, sparse/high addresses, diff results,
+exact symbol lookup (defined, undefined and absent names), and failure behavior.
+It validates native JSON against the report contract shipped by this source version.
 It does not read user firmware or access hardware.
 
 ## Provenance and publication

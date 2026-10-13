@@ -101,6 +101,10 @@ def smoke(executable: Path, work_dir: Path) -> dict:
     missing_base = report(["inspect", "app.bin"], 1)
     invalid_hex = report(["inspect", "bad.hex"], 1)
     overflow_hex = report(["inspect", "overflow.hex"], 1)
+    symbols = report(
+        ["symbols", "before.elf", "--name", "counter", "--name", "undefined", "--name", "absent"]
+    )
+    non_elf_symbols = report(["symbols", "app.bin", "--name", "counter"], 1)
     if (
         elf["build_ids"] != ["01020304"]
         or elf["summary"]["section_usage"]["zero_fill_bytes_sum"] != 8
@@ -112,6 +116,11 @@ def smoke(executable: Path, work_dir: Path) -> dict:
         or missing_base["error"]["code"] != "OPTIONS_INVALID"
         or invalid_hex["error"]["code"] != "FORMAT_INVALID"
         or overflow_hex["error"]["code"] != "FORMAT_INVALID"
+        or [row["status"] for row in symbols["queries"]]
+        != ["unique", "undefined_only", "not_found"]
+        or symbols["queries"][0]["value"] != 0x20000000
+        or symbols["queries"][0]["matches"][0]["section"]["name"] != ".data"
+        or non_elf_symbols["error"]["code"] != "FORMAT_UNSUPPORTED"
     ):
         raise SmokeError("standalone semantic checks differ")
     if any((work_dir / name).read_bytes() != data for name, data in files.items()):
@@ -120,7 +129,7 @@ def smoke(executable: Path, work_dir: Path) -> dict:
         "schema_version": "embedded-firmware-inspect.binary-smoke.v1",
         "ok": True,
         "version": __version__,
-        "checks_passed": 8,
+        "checks_passed": 10,
         "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
         "hardware_access": False,
         "work_directory": str(work_dir.resolve()),

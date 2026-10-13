@@ -11,6 +11,8 @@ def elf_image(
     text: bytes = b"\x00\xbf\x00\xbf",
     elf_type: int = 2,
     note_program: bool = False,
+    symbol_entries: list[tuple[str, int, int, int, int]] | None = None,
+    duplicate_symbol_table: bool = False,
 ) -> bytes:
     """Small executable fixture with distinct .data load and runtime addresses."""
     wide = bits == 64
@@ -26,12 +28,14 @@ def elf_image(
         ".shstrtab",
         ".debug_info",
     ]
+    if duplicate_symbol_table:
+        names.append(".dynsym")
     name_table = b"\0"
     name_offsets = {"": 0}
     for name in names[1:]:
         name_offsets[name] = len(name_table)
         name_table += name.encode() + b"\0"
-    strings = b"\0main\0counter\0undefined\0"
+    strings = b"\0"
     symbol_format = endian + ("IBBHQQ" if wide else "IIIBBH")
 
     def symbol(name: int, address: int, size: int, info: int, section: int) -> bytes:
@@ -42,8 +46,19 @@ def elf_image(
         )
         return struct.pack(symbol_format, *values)
 
-    symbols = symbol(0, 0, 0, 0, 0) + symbol(1, 0, len(text), 0x12, 1)
-    symbols += symbol(6, 0x20000000, 4, 0x11, 2) + symbol(14, 0, 0, 0x12, 0)
+    entries = (
+        symbol_entries
+        if symbol_entries is not None
+        else [
+            ("main", 0, len(text), 0x12, 1),
+            ("counter", 0x20000000, 4, 0x11, 2),
+            ("undefined", 0, 0, 0x12, 0),
+        ]
+    )
+    symbols = symbol(0, 0, 0, 0, 0)
+    for name, address, size, info, section in entries:
+        symbols += symbol(len(strings), address, size, info, section)
+        strings += name.encode("utf-8") + b"\0"
     note = struct.pack(endian + "III", 4, 4, 3) + b"GNU\0" + b"\x01\x02\x03\x04"
     payloads = [
         b"",
@@ -56,6 +71,8 @@ def elf_image(
         name_table,
         b"debug-info",
     ]
+    if duplicate_symbol_table:
+        payloads.append(symbols)
     program_count = 3 if note_program else 2
     body = bytearray(b"\0" * (header_size + program_count * program_size))
     offsets = []
@@ -67,7 +84,9 @@ def elf_image(
     section_offset = len(body)
     for index in range(len(names)):
         kind = (
-            8
+            11
+            if index == 9
+            else 8
             if index == 3
             else 7
             if index == 4
@@ -78,8 +97,8 @@ def elf_image(
         flags = 6 if index == 1 else 3 if index in {2, 3} else 0
         address = 0x20000000 if index == 2 else 0x20000004 if index == 3 else 0
         size = bss_size if index == 3 else len(payloads[index])
-        link, info = (6, 1) if index == 5 else (0, 0)
-        entry_size = struct.calcsize(symbol_format) if index == 5 else 0
+        link, info = (6, 1) if index in {5, 9} else (0, 0)
+        entry_size = struct.calcsize(symbol_format) if index in {5, 9} else 0
         fields = (
             name_offsets[names[index]],
             kind,
