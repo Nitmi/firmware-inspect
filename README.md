@@ -8,9 +8,9 @@ This repository provides a host-only component for Embedded Agent Toolkit.
 Toolkit catalog registration and automatic selection are separate from this
 component's releases; an existing workstation lock is never changed implicitly.
 
-The source `0.2.0` candidate adds exact ELF symbol queries. Published `0.1.0`
-does not include `symbols`; use the source checkout for this new command until
-its release is published and selected explicitly by the host.
+Release [0.2.0](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.2.0)
+adds exact ELF symbol queries. Hosts using `0.1.0` need to select `0.2.0` or newer
+before calling `symbols`; publishing this component does not change a host's lock.
 
 Windows standalone packages are built with a tag-bound provenance workflow;
 see [standalone releases](docs/releases.md). Runtime inspection never invokes
@@ -32,10 +32,11 @@ Invoke the exact extracted executable; no PATH changes or administrator rights
 are required for ordinary file inspection:
 
 ```powershell
-$package = 'C:\tools\firmware-inspect\0.1.0\embedded-firmware-inspect-0.1.0-windows-x86_64'
+$package = 'C:\tools\firmware-inspect\0.2.0\embedded-firmware-inspect-0.2.0-windows-x86_64'
 $inspector = Join-Path $package 'firmware-inspect.exe'
 & $inspector inspect C:\project\build\app.elf --json
 & $inspector diff C:\build-A\app.elf C:\build-B\app.elf --json
+& $inspector symbols C:\project\build\app.elf --name _SEGGER_RTT --json
 ```
 
 ### Python source installation

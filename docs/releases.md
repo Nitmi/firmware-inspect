@@ -53,13 +53,16 @@ the checked-out source commit, tests the code, builds twice, compares hashes,
 smoke-checks the standalone, and emits GitHub attestation. It does not create
 the GitHub Release or publish to PyPI automatically.
 
-Once a reviewed `v0.1.0` Release exists, verify the downloaded ZIP before
-extracting or executing it:
+The published [v0.2.0 Release](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.2.0)
+binds source commit `575b1cca7a21c17c16e0b3affabc5b1c7d0e1e87`.
+Verify its downloaded ZIP before extracting or executing it:
 
 ```powershell
-gh attestation verify embedded-firmware-inspect-0.1.0-windows-x86_64.zip `
-  --repo Nitmi/firmware-inspect --source-ref refs/tags/v0.1.0 `
-  --signer-workflow Nitmi/firmware-inspect/.github/workflows/binary-release.yml `
+gh attestation verify embedded-firmware-inspect-0.2.0-windows-x86_64.zip `
+  --repo Nitmi/firmware-inspect --source-ref refs/tags/v0.2.0 `
+  --source-digest 575b1cca7a21c17c16e0b3affabc5b1c7d0e1e87 `
+  --signer-digest 575b1cca7a21c17c16e0b3affabc5b1c7d0e1e87 `
+  --cert-identity https://github.com/Nitmi/firmware-inspect/.github/workflows/binary-release.yml@refs/tags/v0.2.0 `
   --deny-self-hosted-runners
 ```
 
