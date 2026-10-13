@@ -12,6 +12,11 @@ Release [0.2.0](https://github.com/Nitmi/firmware-inspect/releases/tag/v0.2.0)
 adds exact ELF symbol queries. Hosts using `0.1.0` need to select `0.2.0` or newer
 before calling `symbols`; publishing this component does not change a host's lock.
 
+The local `0.3.0` candidate adds code-address lookup with function ranges and
+in-file DWARF source lines. It is not yet a published release. Use this checkout
+or an explicitly selected candidate when calling `addresses`; the official
+`0.2.0` executable and existing Toolkit locks do not expose this command.
+
 Windows standalone packages are built with a tag-bound provenance workflow;
 see [standalone releases](docs/releases.md). Runtime inspection never invokes
 these build helpers. Only published assets whose integrity and GitHub attestation
@@ -139,12 +144,43 @@ section and declared size, and pass the exact build hash and value to the
 debugger's native plan with its target RAM checks. The query itself never scans
 RAM, attaches, reads a target or asserts block initialization.
 
+## Code addresses and source lines
+
+```powershell
+uv run --locked firmware-inspect addresses C:\project\build\app.elf `
+  --address 0x101 --address 0x120 --address-mode arm-thumb --json
+```
+
+Supply 1..32 distinct unsigned byte addresses from the exact build's linked ELF.
+The default `raw` mode keeps query addresses unchanged. Explicit `arm-thumb`
+mode requires ELF32 EM_ARM and clears only query bit 0, retaining both the input
+and lookup addresses. Neither mode subtracts from LR, relocates a PIE image,
+unwinds a stack, or chooses a nearest symbol. ARM Thumb function symbols retain
+their original `st_value`, with a separately reported code range and ABI bit
+normalization. `symbols` continues to expose raw values unchanged.
+
+Each address has independent `function_status` and `line_status`, with every
+match retained. Function ranges use declared `STT_FUNC` sizes in allocated
+executable sections; zero-sized functions match only their exact start. Lines
+use DWARF 2–5 sequences with half-open intervals and explicit sequence ends.
+Missing metadata returns `not_found`; conflicting declarations return
+`ambiguous`. A completed query can have no function or line match.
+
+Source paths are compiler metadata, kept as file, directory and compilation
+directory fields. They are not opened, rebased or verified against a checkout.
+Function symbols and line tables can disagree after optimization or discarded
+code; a unique line match is a unique metadata location, not a verified function
+body or root cause. External/split and compressed debug data are unsupported.
+Use `--no-lines` for function-only lookup. See the [address query contract](docs/addresses.md)
+for limits and how to interpret PC/LR evidence.
+
 ## Structured contract
 
 `--json` writes one JSON object to stdout; successful operations exit 0 and
 inspection failures exit 1. Invalid CLI syntax exits 2 through argparse.
 Reports use `embedded-firmware-inspect.inspection.v1`,
 `embedded-firmware-inspect.diff.v1`, `embedded-firmware-inspect.symbols.v1`,
+`embedded-firmware-inspect.addresses.v1`,
 or `embedded-firmware-inspect.error.v1`.
 Reports always state `scope=host_only_firmware_analysis`, `hardware_access=false`,
 `executables_started=false`, and `flash_authorized=false`.
@@ -160,7 +196,7 @@ note entries to 4096 and individual Build ID text to 8192 characters.
 ## Agent integration
 
 The self-contained [firmware-inspect Skill](skills/firmware-inspect/SKILL.md)
-routes firmware identity, layout, footprint and build-comparison requests to
+routes firmware identity, layout, footprint, symbol/address and build-comparison requests to
 the structured CLI. It is shipped in the source distribution, not installed
 into an Agent host by the Python installer. No component MCP server is needed
 for bounded, file-only inspection. Toolkit catalog integration and activation
@@ -184,3 +220,5 @@ git diff --check
 
 Hardware is never required for the tests. Format fixtures cover load/run address
 differences, BSS, sparse HEX, GNU Build IDs, symbols, malformed inputs and bounds.
+Address fixtures cover DWARF 2–5, both ELF widths/byte orders, sequence gaps,
+overlaps, Thumb values, in-file string tables and bounded malformed units.

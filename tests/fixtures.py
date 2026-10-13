@@ -13,6 +13,7 @@ def elf_image(
     note_program: bool = False,
     symbol_entries: list[tuple[str, int, int, int, int]] | None = None,
     duplicate_symbol_table: bool = False,
+    debug_sections: dict[str, bytes] | None = None,
 ) -> bytes:
     """Small executable fixture with distinct .data load and runtime addresses."""
     wide = bits == 64
@@ -30,6 +31,8 @@ def elf_image(
     ]
     if duplicate_symbol_table:
         names.append(".dynsym")
+    if debug_sections:
+        names.extend(name for name in debug_sections if name not in names)
     name_table = b"\0"
     name_offsets = {"": 0}
     for name in names[1:]:
@@ -73,6 +76,9 @@ def elf_image(
     ]
     if duplicate_symbol_table:
         payloads.append(symbols)
+    if debug_sections:
+        payloads[8] = debug_sections.get(".debug_info", payloads[8])
+        payloads.extend(debug_sections[name] for name in names[len(payloads) :])
     program_count = 3 if note_program else 2
     body = bytearray(b"\0" * (header_size + program_count * program_size))
     offsets = []
@@ -85,7 +91,7 @@ def elf_image(
     for index in range(len(names)):
         kind = (
             11
-            if index == 9
+            if names[index] == ".dynsym"
             else 8
             if index == 3
             else 7
@@ -97,8 +103,8 @@ def elf_image(
         flags = 6 if index == 1 else 3 if index in {2, 3} else 0
         address = 0x20000000 if index == 2 else 0x20000004 if index == 3 else 0
         size = bss_size if index == 3 else len(payloads[index])
-        link, info = (6, 1) if index in {5, 9} else (0, 0)
-        entry_size = struct.calcsize(symbol_format) if index in {5, 9} else 0
+        link, info = (6, 1) if names[index] in {".symtab", ".dynsym"} else (0, 0)
+        entry_size = struct.calcsize(symbol_format) if names[index] in {".symtab", ".dynsym"} else 0
         fields = (
             name_offsets[names[index]],
             kind,

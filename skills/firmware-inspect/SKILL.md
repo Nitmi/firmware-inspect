@@ -1,6 +1,6 @@
 ---
 name: firmware-inspect
-description: Inspect local ELF, Intel HEX, or BIN firmware identity and layout, query exact ELF symbol names, or compare builds using firmware-inspect. Use for pre-flash artifact analysis, symbol lookup and footprint regressions, not live target access or flashing.
+description: Inspect local ELF, Intel HEX, or BIN firmware identity and layout, query exact ELF symbols, resolve PC/LR code addresses to functions and in-file DWARF lines, or compare builds using firmware-inspect. Use for offline build and crash-log analysis, not live target access or flashing.
 ---
 
 # Firmware Inspect
@@ -15,6 +15,7 @@ firmware-inspect inspect C:\project\build\whole.hex --json
 firmware-inspect inspect C:\project\build\app.bin --base-address 0x10000 --json
 firmware-inspect diff C:\build-A\app.elf C:\build-B\app.elf --json
 firmware-inspect symbols C:\project\build\app.elf --name _SEGGER_RTT --json
+firmware-inspect addresses C:\project\build\app.elf --address 0x101 --address-mode arm-thumb --json
 ```
 
 BIN needs a base address from the user's project/linker context; do not invent
@@ -36,6 +37,21 @@ clear ABI bits. For an RTT block, check a unique section-defined object, its
 allocated writable section, declared size, exact ELF hash and the target RAM
 map through the debugger's native plan before using the value. This file query
 does not prove that the block is initialized or that this firmware is running.
+
+For PC/LR or code-address requests, `addresses` requires 0.3.0+; use the exact
+build's linked ELF and preserve its hash. Repeat `--address` for 1..32 distinct
+unsigned byte addresses. Default `raw` preserves inputs; explicit `arm-thumb`
+requires ELF32 EM_ARM and clears query bit 0 while retaining the input value.
+Function matches retain raw symbol values and report any Thumb-bit range
+normalization separately. Do not silently subtract from LR or infer relocation.
+Read `function_status` and `line_status` independently; both can be `unique`,
+`ambiguous` or `not_found`. Keep all conflicting matches. Zero-sized functions
+match only their exact start, and sequence gaps supply no source line. DWARF
+paths are unverified metadata and are never opened. Optimization/discarded code
+can leave a line location unrelated to the matching function; this does not
+establish a call stack or running identity. Use `--no-lines` for function-only
+lookup. Read [the address guide](../../docs/addresses.md) when source lines,
+missing debug data or return-address interpretation matter.
 
 Interpret the report precisely:
 

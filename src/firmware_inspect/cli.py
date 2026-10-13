@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .addresses import lookup as lookup_addresses
 from .core import InspectionError, compare, inspect
 from .symbols import lookup
 
@@ -42,13 +43,36 @@ def parser() -> argparse.ArgumentParser:
         "--name", action="append", required=True, help="exact name; repeat up to 32 times"
     )
     symbols.add_argument("--json", action="store_true")
+    addresses = commands.add_parser(
+        "addresses", help="locate code addresses in ELF functions/DWARF lines"
+    )
+    addresses.add_argument("firmware", type=Path)
+    addresses.add_argument(
+        "--address",
+        type=_address,
+        action="append",
+        required=True,
+        help="linker virtual code address; repeat up to 32 times",
+    )
+    addresses.add_argument(
+        "--address-mode",
+        choices=("raw", "arm-thumb"),
+        default="raw",
+        help="raw values, or explicit ARM32 Thumb-bit normalization",
+    )
+    addresses.add_argument("--no-lines", action="store_true", help="query function symbols only")
+    addresses.add_argument("--json", action="store_true")
     return root
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        if args.command == "symbols":
+        if args.command == "addresses":
+            report = lookup_addresses(
+                args.firmware, args.address, address_mode=args.address_mode, lines=not args.no_lines
+            )
+        elif args.command == "symbols":
             report = lookup(args.firmware, args.name)
         else:
             options = {"format": args.format, "base_address": args.base_address}
@@ -71,6 +95,26 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
     elif not report["ok"]:
         print(f"{report['error']['code']}: {report['error']['message']}", file=sys.stderr)
+    elif args.command == "addresses":
+        print(f"ELF: {json.dumps(report['source']['path'])}")
+        print(f"SHA-256: {report['source']['sha256']}")
+        for query in report["address_queries"]:
+            print(
+                f"  0x{query['address']:X} -> 0x{query['lookup_address']:X}: "
+                f"functions={query['function_status']}, lines={query['line_status']}"
+            )
+            for function in query["functions"]:
+                print(
+                    f"    {json.dumps(function['name'])}+0x{function['offset_bytes']:X} "
+                    f"({function['match_kind']})"
+                )
+            for location in query["lines"]:
+                print(
+                    f"    {json.dumps(location['file_name'])}:"
+                    f"{location['line']}:{location['column']}"
+                )
+        for warning in report["warnings"]:
+            print(f"Warning: {warning}", file=sys.stderr)
     elif args.command == "symbols":
         print(f"ELF: {json.dumps(report['source']['path'])}")
         print(f"SHA-256: {report['source']['sha256']}")

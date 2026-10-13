@@ -5,9 +5,9 @@
   "additionalProperties": false,
   "required": ["schema_version", "ok", "operation", "scope", "hardware_access", "executables_started", "flash_authorized"],
   "properties": {
-    "schema_version": {"enum": ["embedded-firmware-inspect.inspection.v1", "embedded-firmware-inspect.diff.v1", "embedded-firmware-inspect.symbols.v1", "embedded-firmware-inspect.error.v1"]},
+    "schema_version": {"enum": ["embedded-firmware-inspect.inspection.v1", "embedded-firmware-inspect.diff.v1", "embedded-firmware-inspect.symbols.v1", "embedded-firmware-inspect.addresses.v1", "embedded-firmware-inspect.error.v1"]},
     "ok": {"type": "boolean"},
-    "operation": {"enum": ["inspect", "diff", "symbols"]},
+    "operation": {"enum": ["inspect", "diff", "symbols", "addresses"]},
     "scope": {"const": "host_only_firmware_analysis"},
     "hardware_access": {"const": false},
     "executables_started": {"const": false},
@@ -29,6 +29,18 @@
     "symbol_tables_scanned": {"type": "integer", "minimum": 0, "maximum": 4096},
     "symbol_entries_scanned": {"type": "integer", "minimum": 0, "maximum": 200000},
     "queries": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/symbol_query"}},
+    "address_mode": {"enum": ["raw", "arm-thumb"]},
+    "address_queries": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/address_query"}},
+    "debug_lines": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "compile_units_scanned", "line_programs_scanned", "line_entries_scanned"],
+      "properties": {
+        "status": {"enum": ["disabled", "absent", "scanned"]},
+        "compile_units_scanned": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "line_programs_scanned": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "line_entries_scanned": {"type": "integer", "minimum": 0, "maximum": 200000}
+      }
+    },
     "entry_point": {"anyOf": [{"$ref": "#/$defs/address"}, {"type": "null"}]},
     "hex_start_address": {
       "anyOf": [
@@ -133,6 +145,7 @@
         "entry_point_changed": false, "layout_changed": false, "section_usage_delta": false,
         "section_changes": false, "load_segment_changes": false, "error": false,
         "queries": false, "value_semantics": false, "complete": false,
+        "address_mode": false, "address_queries": false, "debug_lines": false,
         "symbol_tables_scanned": false, "symbol_entries_scanned": false
       },
       "required": ["tool", "warnings", "source", "format", "address_unit", "range_convention", "architecture", "entry_point", "build_ids", "sections", "load_segments", "symbols", "programmed_ranges", "summary"]
@@ -143,6 +156,7 @@
         "source": false, "address_unit": false, "range_convention": false, "entry_point": false,
         "hex_start_address": false, "sections": false, "load_segments": false, "symbols": false,
         "summary": false, "error": false,
+        "address_mode": false, "address_queries": false, "debug_lines": false,
         "queries": false, "value_semantics": false, "complete": false,
         "symbol_tables_scanned": false, "symbol_entries_scanned": false
       },
@@ -159,9 +173,25 @@
         "source_identical": false, "identical": false, "file_size_delta_bytes": false,
         "program_address_delta_bytes": false, "entry_point_changed": false, "layout_changed": false,
         "section_usage_delta": false, "section_changes": false, "load_segment_changes": false,
-        "error": false
+        "error": false,
+        "address_mode": false, "address_queries": false, "debug_lines": false
       },
       "required": ["tool", "warnings", "source", "format", "architecture", "queries", "value_semantics", "complete", "symbol_tables_scanned", "symbol_entries_scanned"]
+    },
+    {
+      "properties": {
+        "schema_version": {"const": "embedded-firmware-inspect.addresses.v1"},
+        "ok": {"const": true}, "operation": {"const": "addresses"},
+        "format": {"const": "elf"}, "architecture": {"type": "object"},
+        "before": false, "after": false, "queries": false, "value_semantics": false,
+        "entry_point": false, "hex_start_address": false, "build_ids": false, "sections": false,
+        "load_segments": false, "symbols": false, "programmed_ranges": false, "summary": false,
+        "source_identical": false, "identical": false, "file_size_delta_bytes": false,
+        "program_address_delta_bytes": false, "entry_point_changed": false, "layout_changed": false,
+        "section_usage_delta": false, "section_changes": false, "load_segment_changes": false,
+        "error": false
+      },
+      "required": ["tool", "warnings", "source", "format", "architecture", "address_unit", "range_convention", "address_mode", "address_queries", "debug_lines", "complete", "symbol_tables_scanned", "symbol_entries_scanned"]
     },
     {
       "properties": {
@@ -174,12 +204,67 @@
         "program_address_delta_bytes": false, "entry_point_changed": false, "layout_changed": false,
         "section_usage_delta": false, "section_changes": false, "load_segment_changes": false,
         "queries": false, "value_semantics": false, "complete": false,
+        "address_mode": false, "address_queries": false, "debug_lines": false,
         "symbol_tables_scanned": false, "symbol_entries_scanned": false
       },
       "required": ["error"]
     }
   ],
   "$defs": {
+    "address_function": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "table_index", "table_name", "symbol_index", "section_index", "binding", "visibility", "raw_value", "range_start", "range_end_exclusive", "size_bytes", "offset_bytes", "match_kind", "value_normalization"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "table_index": {"type": "integer", "minimum": 0, "maximum": 4095},
+        "table_name": {"type": "string", "maxLength": 1024},
+        "symbol_index": {"type": "integer", "minimum": 0, "maximum": 199999},
+        "section_index": {"type": "integer", "minimum": 1, "maximum": 4095},
+        "binding": {"type": ["string", "integer"], "maxLength": 32},
+        "visibility": {"type": ["string", "integer"], "maxLength": 32},
+        "raw_value": {"$ref": "#/$defs/address"}, "range_start": {"$ref": "#/$defs/address"},
+        "range_end_exclusive": {"type": ["null", "integer"], "minimum": 0, "maximum": 18446744073709551616},
+        "size_bytes": {"$ref": "#/$defs/address"}, "offset_bytes": {"$ref": "#/$defs/address"},
+        "match_kind": {"enum": ["declared_range", "exact_start_only"]},
+        "value_normalization": {"enum": ["none", "arm_thumb_bit"]}
+      },
+      "allOf": [{
+        "if": {"properties": {"match_kind": {"const": "exact_start_only"}}},
+        "then": {"properties": {"size_bytes": {"const": 0}, "range_end_exclusive": {"const": null}, "offset_bytes": {"const": 0}}},
+        "else": {"properties": {"size_bytes": {"minimum": 1}, "range_end_exclusive": {"type": "integer", "minimum": 1}}}
+      }]
+    },
+    "address_line": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file_name", "directory", "compilation_directory", "line", "column", "discriminator", "is_statement", "cu_offset", "line_program_offset", "entry_index", "dwarf_version", "range_start", "range_end_exclusive"],
+      "properties": {
+        "file_name": {"type": ["string", "null"], "maxLength": 4096},
+        "directory": {"type": ["string", "null"], "maxLength": 4096},
+        "compilation_directory": {"type": ["string", "null"], "maxLength": 4096},
+        "line": {"type": "integer", "minimum": 1}, "column": {"type": "integer", "minimum": 0},
+        "discriminator": {"type": "integer", "minimum": 0}, "is_statement": {"type": "boolean"},
+        "cu_offset": {"type": "integer", "minimum": 0}, "line_program_offset": {"type": "integer", "minimum": 0},
+        "entry_index": {"type": "integer", "minimum": 0}, "dwarf_version": {"enum": [2, 3, 4, 5]},
+        "range_start": {"$ref": "#/$defs/address"}, "range_end_exclusive": {"type": "integer", "minimum": 1, "maximum": 18446744073709551616}
+      }
+    },
+    "address_query": {
+      "type": "object", "additionalProperties": false,
+      "required": ["address", "lookup_address", "function_status", "functions", "line_status", "lines"],
+      "properties": {
+        "address": {"$ref": "#/$defs/address"}, "lookup_address": {"$ref": "#/$defs/address"},
+        "function_status": {"enum": ["unique", "ambiguous", "not_found"]},
+        "functions": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/address_function"}},
+        "line_status": {"enum": ["unique", "ambiguous", "not_found"]},
+        "lines": {"type": "array", "maxItems": 128, "items": {"$ref": "#/$defs/address_line"}}
+      },
+      "allOf": [
+        {"if": {"properties": {"function_status": {"const": "not_found"}}}, "then": {"properties": {"functions": {"maxItems": 0}}}, "else": {"properties": {"functions": {"minItems": 1}}}},
+        {"if": {"properties": {"function_status": {"const": "ambiguous"}}}, "then": {"properties": {"functions": {"minItems": 2}}}},
+        {"if": {"properties": {"line_status": {"const": "not_found"}}}, "then": {"properties": {"lines": {"maxItems": 0}}}, "else": {"properties": {"lines": {"minItems": 1}}}},
+        {"if": {"properties": {"line_status": {"const": "ambiguous"}}}, "then": {"properties": {"lines": {"minItems": 2}}}}
+      ]
+    },
     "symbol_match": {
       "type": "object", "additionalProperties": false,
       "required": ["table_index", "table_name", "symbol_index", "type", "binding", "visibility", "value", "value_kind", "size_bytes", "definition", "section_index", "section"],
